@@ -6,7 +6,7 @@
     "url": "https://github.com/Facepunch/webrcon"
   },
   "scripts": {
-    "server": "http-server -p 8888",
+    "server": "http-server -p 8980",
     "start": "npm run server"
   },
   "devDependencies": {

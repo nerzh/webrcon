@@ -156,16 +156,40 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
     ]
   };
 
-  rconService.InstallService($scope, _refresh);
-
   // TODO: move updateinterval to service
-  var timer = $interval(_refresh, 1000);
+  var timer = null;
+
+  rconService.InstallService($scope, _startRefresh);
+
+  $scope.$on("OnDisconnected", function() {
+    _stopRefresh();
+  });
+
   $scope.$on("$destroy", function() {
-    $interval.cancel(timer);
+    _stopRefresh();
     $scope.serverinfo = {};
   });
 
+  function _startRefresh() {
+    if (timer !== null)
+      return;
+
+    _refresh();
+    timer = $interval(_refresh, 1000);
+  }
+
+  function _stopRefresh() {
+    if (timer === null)
+      return;
+
+    $interval.cancel(timer);
+    timer = null;
+  }
+
   function _refresh() {
+    if (!rconService.IsConnected())
+      return;
+
     rconService.Request('serverinfo', $scope, function(msg) {
       _updateData(JSON.parse(msg.Message));
     });

@@ -1,6 +1,8 @@
 
 app.controller( 'ChatController', ChatController );
 
+var CHAT_OUTPUT_LIMIT = 500;
+
 function ChatController( $scope, rconService, $timeout )
 {
 	$scope.Output = [];
@@ -24,6 +26,9 @@ function ChatController( $scope, rconService, $timeout )
 		msg.Username = stripHtml(msg.Username);
 		
 		$scope.Output.push( msg );
+		if($scope.Output.length > CHAT_OUTPUT_LIMIT) {
+			$scope.Output.splice(0, $scope.Output.length - CHAT_OUTPUT_LIMIT);
+		}
 		
 		if($scope.isOnBottom()) {
 			$scope.ScrollToBottom();

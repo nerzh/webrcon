@@ -1,6 +1,9 @@
 
 app.controller( 'ConsoleController', ConsoleController );
 
+var CONSOLE_OUTPUT_LIMIT = 500;
+var COMMAND_HISTORY_LIMIT = 100;
+
 function ConsoleController( $scope, rconService, $timeout )
 {
 	$scope.Output = [];
@@ -55,6 +58,9 @@ function ConsoleController( $scope, rconService, $timeout )
 		$scope.OnMessage( { Message: $scope.Command, Type: 'Command' } );
 
 		$scope.commandHistory.push($scope.Command);
+		if($scope.commandHistory.length > COMMAND_HISTORY_LIMIT) {
+			$scope.commandHistory.splice(0, $scope.commandHistory.length - COMMAND_HISTORY_LIMIT);
+		}
 
 		rconService.Command( $scope.Command, 1 );
 		$scope.Command = "";
@@ -137,6 +143,9 @@ function ConsoleController( $scope, rconService, $timeout )
 		msg.Message = stripHtml(msg.Message);
 
 		$scope.Output.push( msg );
+		if($scope.Output.length > CONSOLE_OUTPUT_LIMIT) {
+			$scope.Output.splice(0, $scope.Output.length - CONSOLE_OUTPUT_LIMIT);
+		}
 
 		if($scope.isOnBottom()) {
 			$scope.ScrollToBottom();

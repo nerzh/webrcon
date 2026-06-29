@@ -60,12 +60,14 @@ function RconController($scope, $rootScope, rconService, $timeout, $route) {
 
   rconService.OnOpen = function() {
     $scope.Connected = true;
+    $scope.address = rconService.Address;
     $scope.$broadcast("OnConnected");
     $scope.$digest();
-    $scope.address = rconService.Address;
   }
 
   rconService.OnClose = function(ev) {
+    $scope.Connected = false;
+    $scope.address = '#/home';
     $scope.$broadcast("OnDisconnected", ev);
     $scope.$digest();
   }

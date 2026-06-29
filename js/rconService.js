@@ -15,9 +15,48 @@ function RconService() {
 
   var LastIndex = 1001;
 
+  function clearCallback(identifier) {
+    var cb = Service.Callbacks[identifier];
+    if (cb && cb.timeout) {
+      clearTimeout(cb.timeout);
+    }
+    if (cb && cb.destroyListener) {
+      cb.destroyListener();
+    }
+    delete Service.Callbacks[identifier];
+  }
+
+  function clearCallbacks() {
+    for (var identifier in Service.Callbacks) {
+      if (Service.Callbacks.hasOwnProperty(identifier)) {
+        clearCallback(identifier);
+      }
+    }
+    Service.Callbacks = {};
+  }
+
+  function closeSocket(socket) {
+    if (!socket)
+      return;
+
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onclose = null;
+    socket.onerror = null;
+
+    if (socket.readyState === ConnectionStatus.CONNECTING || socket.readyState === ConnectionStatus.OPEN) {
+      socket.close();
+    }
+  }
+
   Service.Connect = function(addr, pass) {
+    closeSocket(this.Socket);
+    clearCallbacks();
+
     this.Socket = new WebSocket("ws://" + addr + "/" + pass);
     this.Address = addr;
+
+    var socket = this.Socket;
 
     this.Socket.onmessage = function(e) {
       var data = angular.fromJson(e.data);
@@ -28,12 +67,13 @@ function RconService() {
       //
       if (data.Identifier > 1000) {
         var cb = Service.Callbacks[data.Identifier];
+        clearCallback(data.Identifier);
+
         if (cb != null) {
           cb.scope.$apply(function() {
             cb.callback(data);
           });
         }
-        Service.Callbacks[data.Identifier] = null;
 
         return;
       }
@@ -46,9 +86,28 @@ function RconService() {
       }
     };
 
-    this.Socket.onopen = this.OnOpen;
-    this.Socket.onclose = this.OnClose;
-    this.Socket.onerror = this.OnError;
+    this.Socket.onopen = function(ev) {
+      if (Service.OnOpen != null) {
+        Service.OnOpen(ev);
+      }
+    };
+
+    this.Socket.onclose = function(ev) {
+      if (Service.Socket === socket) {
+        Service.Socket = null;
+        clearCallbacks();
+      }
+
+      if (Service.OnClose != null) {
+        Service.OnClose(ev);
+      }
+    };
+
+    this.Socket.onerror = function(ev) {
+      if (Service.OnError != null) {
+        Service.OnError(ev);
+      }
+    };
   }
 
   Service.Disconnect = function() {
@@ -57,17 +116,17 @@ function RconService() {
       this.Socket = null;
     }
 
-    this.Callbacks = {};
+    clearCallbacks();
   }
 
   Service.Command = function(msg, identifier) {
     if (this.Socket === null)
-      return;
+      return false;
 
     if (!this.IsConnected())
-      return;
+      return false;
 
-    if (identifier === null)
+    if (identifier == null)
       identifier = -1;
 
     var packet = {
@@ -77,18 +136,41 @@ function RconService() {
     };
 
     this.Socket.send(JSON.stringify(packet));
+    return true;
   };
 
   //
   // Make a request, call this function when it returns
   //
   Service.Request = function(msg, scope, callback) {
+    if (!this.IsConnected())
+      return false;
+
     LastIndex++;
-    this.Callbacks[LastIndex] = {
+    var identifier = LastIndex;
+
+    var request = {
       scope: scope,
-      callback: callback
+      callback: callback,
+      timeout: setTimeout(function() {
+        clearCallback(identifier);
+      }, 30000)
     };
-    Service.Command(msg, LastIndex);
+
+    if (scope && typeof scope.$on === 'function') {
+      request.destroyListener = scope.$on("$destroy", function() {
+        clearCallback(identifier);
+      });
+    }
+
+    this.Callbacks[LastIndex] = request;
+
+    if (!Service.Command(msg, LastIndex)) {
+      clearCallback(LastIndex);
+      return false;
+    }
+
+    return true;
   }
 
   //

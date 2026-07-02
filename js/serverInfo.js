@@ -1,10 +1,16 @@
 app.controller('ServerInfoController', ServerInfoController);
 
-var DATA_LIMIT = 100;
-var recordedData = [];
+var DATA_LIMIT = 60;
+var SERVERINFO_REFRESH_INTERVAL = 1000;
+var CHART_REFRESH_INTERVAL = 5000;
 
 function ServerInfoController($scope, rconService, $routeParams, $interval) {
   $scope.useCharts = false;
+
+  var recordedData = [];
+  var lastChartUpdate = 0;
+  var timer = null;
+  var destroyed = false;
 
   // TODO: move serverinfo to service
   $scope.serverinfo = {};
@@ -42,7 +48,7 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
             return d.endAngle / 2 - Math.PI / 2
           }
         },
-        duration: 500
+        duration: 0
       }
     },
     data: []
@@ -156,26 +162,43 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
     ]
   };
 
-  // TODO: move updateinterval to service
-  var timer = null;
-
   rconService.InstallService($scope, _startRefresh);
+
+  $scope.ToggleCharts = function() {
+    $scope.useCharts = !$scope.useCharts;
+
+    if (!$scope.useCharts) {
+      _resetChartData();
+      return;
+    }
+
+    lastChartUpdate = 0;
+    if ($scope.serverinfo && Object.keys($scope.serverinfo).length > 0) {
+      _updateChartData($scope.serverinfo, Date.now());
+    }
+  }
 
   $scope.$on("OnDisconnected", function() {
     _stopRefresh();
+    _resetChartData();
   });
 
   $scope.$on("$destroy", function() {
+    destroyed = true;
     _stopRefresh();
+    _resetChartData();
+    document.removeEventListener('visibilitychange', _handleVisibilityChange);
     $scope.serverinfo = {};
   });
 
+  document.addEventListener('visibilitychange', _handleVisibilityChange);
+
   function _startRefresh() {
-    if (timer !== null)
+    if (destroyed || timer !== null || document.hidden)
       return;
 
     _refresh();
-    timer = $interval(_refresh, 1000);
+    timer = $interval(_refresh, SERVERINFO_REFRESH_INTERVAL);
   }
 
   function _stopRefresh() {
@@ -187,7 +210,7 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
   }
 
   function _refresh() {
-    if (!rconService.IsConnected())
+    if (!rconService.IsConnected() || document.hidden)
       return;
 
     rconService.Request('serverinfo', $scope, function(msg) {
@@ -199,12 +222,20 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
     $scope.serverinfo = data;
 
     if ($scope.useCharts) {
-      _collectChartData(data);
-      _generateChartData();
+      var now = Date.now();
+      if (lastChartUpdate === 0 || now - lastChartUpdate >= CHART_REFRESH_INTERVAL) {
+        _updateChartData(data, now);
+      }
     }
   }
 
-  function _collectChartData(data) {
+  function _updateChartData(data, timestamp) {
+    lastChartUpdate = timestamp;
+    _collectChartData(data, timestamp);
+    _generateChartData();
+  }
+
+  function _collectChartData(data, timestamp) {
     // player chart
     $scope.playersChart.data = [
       {
@@ -222,9 +253,16 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
       }
     ];
 
-    recordedData.push({ts: Date.now(), data: data});
+    recordedData.push({
+      ts: timestamp,
+      framerate: Number(data.Framerate) || 0,
+      entityCount: Number(data.EntityCount) || 0,
+      networkIn: Number(data.NetworkIn) || 0,
+      networkOut: Number(data.NetworkOut) || 0
+    });
+
     if (recordedData.length > DATA_LIMIT) {
-      recordedData = recordedData.slice(Math.max(recordedData.length - DATA_LIMIT, 1));
+      recordedData.splice(0, recordedData.length - DATA_LIMIT);
     }
   }
 
@@ -238,11 +276,11 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
 
     for (var i = 0; i < recordedData.length; i++) {
       var record = recordedData[i];
-      fpsChartValues.push({x: record.ts, y: record.data.Framerate});
-      entChartValues.push({x: record.ts, y: record.data.EntityCount});
+      fpsChartValues.push({x: record.ts, y: record.framerate});
+      entChartValues.push({x: record.ts, y: record.entityCount});
 
-      netInChartValues.push({x: record.ts, y: record.data.NetworkIn});
-      netOutChartValues.push({x: record.ts, y: record.data.NetworkOut});
+      netInChartValues.push({x: record.ts, y: record.networkIn});
+      netOutChartValues.push({x: record.ts, y: record.networkOut});
     }
 
     $scope.performanceChart.data[0].values = fpsChartValues;
@@ -250,6 +288,28 @@ function ServerInfoController($scope, rconService, $routeParams, $interval) {
 
     $scope.netChart.data[0].values = netInChartValues;
     $scope.netChart.data[1].values = netOutChartValues;
+  }
+
+  function _resetChartData() {
+    recordedData.length = 0;
+    lastChartUpdate = 0;
+
+    $scope.playersChart.data = [];
+    $scope.performanceChart.data[0].values = [];
+    $scope.performanceChart.data[1].values = [];
+    $scope.netChart.data[0].values = [];
+    $scope.netChart.data[1].values = [];
+  }
+
+  function _handleVisibilityChange() {
+    if (document.hidden) {
+      _stopRefresh();
+      return;
+    }
+
+    if (rconService.IsConnected()) {
+      _startRefresh();
+    }
   }
 
 }

@@ -6,6 +6,7 @@ var CHAT_OUTPUT_LIMIT = 500;
 function ChatController( $scope, rconService, $timeout )
 {
 	$scope.Output = [];
+	var scrollTimeout = null;
 
 	$scope.SubmitCommand = function ()
 	{
@@ -37,9 +38,13 @@ function ChatController( $scope, rconService, $timeout )
 
 	$scope.ScrollToBottom = function()
 	{
-		var element = $( "#ChatController .Output" );
+		if(scrollTimeout !== null) {
+			return;
+		}
 
-		$timeout( function() {
+		scrollTimeout = $timeout( function() {
+			scrollTimeout = null;
+			var element = $( "#ChatController .Output" );
 			element.scrollTop( element.prop('scrollHeight') );
 		}, 50 );
 	}
@@ -84,6 +89,13 @@ function ChatController( $scope, rconService, $timeout )
 	}
 
 	rconService.InstallService( $scope, $scope.GetHistory )
+
+	$scope.$on( '$destroy', function () {
+		if(scrollTimeout !== null) {
+			$timeout.cancel(scrollTimeout);
+			scrollTimeout = null;
+		}
+	} )
 }
 
 function stripHtml( text )

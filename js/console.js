@@ -3,12 +3,14 @@ app.controller( 'ConsoleController', ConsoleController );
 
 var CONSOLE_OUTPUT_LIMIT = 500;
 var COMMAND_HISTORY_LIMIT = 100;
+var LOG_UNHANDLED_CONSOLE_MESSAGES = false;
 
 function ConsoleController( $scope, rconService, $timeout )
 {
 	$scope.Output = [];
 	$scope.commandHistory = [];
 	$scope.commandHistoryIndex = 0;
+	var scrollTimeout = null;
 
 	$scope.KeyUp = function (event)
 	{
@@ -84,16 +86,22 @@ function ConsoleController( $scope, rconService, $timeout )
 				break;
 
 			default: 
-				console.log( msg );
+				if(LOG_UNHANDLED_CONSOLE_MESSAGES) {
+					console.log( msg );
+				}
 				return;
-		}
+	}
 	}
 
 	$scope.ScrollToBottom = function()
 	{
-		var element = $( "#ConsoleController .Output" );
+		if(scrollTimeout !== null) {
+			return;
+		}
 
-		$timeout( function() {
+		scrollTimeout = $timeout( function() {
+			scrollTimeout = null;
+			var element = $( "#ConsoleController .Output" );
 			element.scrollTop( element.prop('scrollHeight') );
 		}, 50 );
 	}
@@ -153,4 +161,11 @@ function ConsoleController( $scope, rconService, $timeout )
 	}
 
 	rconService.InstallService( $scope, $scope.GetHistory )
+
+	$scope.$on( '$destroy', function () {
+		if(scrollTimeout !== null) {
+			$timeout.cancel(scrollTimeout);
+			scrollTimeout = null;
+		}
+	} )
 }

@@ -1,8 +1,12 @@
-<div ng-controller="ServerInfoController" id="ServerInfoController" data-ng-init="useCharts=true;">
+<div ng-controller="ServerInfoController" id="ServerInfoController">
 
 	<div class="row">
 
 		<div class="col-sm-12">
+			<button ng-click="ToggleCharts()" class="btn btn-default pull-right" type="button">
+				<span class="glyphicon" ng-class="useCharts ? 'glyphicon-remove' : 'glyphicon-stats'"></span>
+				{{useCharts ? 'Hide charts' : 'Show charts'}}
+			</button>
 			<h2>{{serverinfo.Hostname}}</h2>
 		</div>
 
@@ -14,7 +18,7 @@
 		</div>
 
 	</div>
-	<div class="row">
+	<div class="row" ng-if="useCharts">
 
 		<div class="col-sm-12">
 
